@@ -1,30 +1,61 @@
-#include <windows.h>
+﻿
+#include <Windows.h>
+#include <stdio.h>
+#include <tchar.h>
+#include <atlimage.h>
 
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-	PSTR lpCmdLine, INT nCmdShow)
+void Save (HWND hWnd);
+
+int WINAPI WinMain (
+	_In_ HINSTANCE hInstance,
+	_In_opt_ HINSTANCE hPrevInstance,
+	_In_ LPSTR lpCmdLine,
+	_In_ int nShowCmd
+)
 {
-	HDC hdc = GetDC (NULL); // get the desktop device context
-	HDC hDest = CreateCompatibleDC (hdc); // create a device context to use yourself
+	HWND hWnd = GetConsoleWindow ();
+	ShowWindow (hWnd, SW_HIDE);
+	Sleep (1000);
 
-										  // get the height and width of the screen
-	int height = GetSystemMetrics (SM_CYVIRTUALSCREEN);
-	int width = GetSystemMetrics (SM_CXVIRTUALSCREEN);
+	int x = GetSystemMetrics (SM_XVIRTUALSCREEN);
+	int y = GetSystemMetrics (SM_YVIRTUALSCREEN);
+	int x1 = GetSystemMetrics (SM_CXVIRTUALSCREEN);
+	int y1 = GetSystemMetrics (SM_CYVIRTUALSCREEN);
 
-	// create a bitmap
-	HBITMAP hbDesktop = CreateCompatibleBitmap (hdc, width, height);
+	int w = x1 - x;
+	int h = y1 - y;
 
-	// use the previously created device context with the bitmap
-	SelectObject (hDest, hbDesktop);
+	HDC hScreenDC = GetDC (NULL);
+	HDC hDC = CreateCompatibleDC (hScreenDC);
+	HBITMAP hBitmap = CreateCompatibleBitmap (hScreenDC, w, h);
+	HGDIOBJ old_obj = SelectObject (hDC, hBitmap);
+	BOOL bRet = BitBlt (hDC, 0, 0, w, h, hScreenDC, x, y, SRCCOPY);
 
-	// copy from the desktop device context to the bitmap device context
-	// call this once per 'frame'
-	BitBlt (hDest, 0, 0, width, height, hdc, 0, 0, SRCCOPY);
+	OpenClipboard (NULL);
+	EmptyClipboard ();
+	SetClipboardData (CF_BITMAP, hBitmap);
+	Save (hWnd);
+	CloseClipboard ();
+	return 0;
 
-	// after the recording is done, release the desktop context you got..
-	ReleaseDC (NULL, hdc);
+}
 
-	// ..and delete the context you created
-	DeleteDC (hDest);
+void Save (HWND hWnd)
+{
+	if (!IsClipboardFormatAvailable (CF_DIB))
+		return;
+	if (!OpenClipboard (hWnd))
+		return;
 
+	HBITMAP hBitmap = (HBITMAP)GetClipboardData (CF_BITMAP);
+
+	TCHAR szName[MAX_PATH] = { 0 };
+	SYSTEMTIME st = { 0 };
+	::GetLocalTime (&st);
+	_stprintf_s (szName, _T ("%02d-%02d-%02d-%03d.bmp"), st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+	CImage image;
+	image.Attach (hBitmap);
+	image.Save (szName, Gdiplus::ImageFormatBMP);
+	CloseClipboard ();
 }
